@@ -1,5 +1,7 @@
 using HomeSavingsTracker.Api.Contracts.Categories;
 using HomeSavingsTracker.Application.Categories.Commands.CreateCategory;
+using HomeSavingsTracker.Application.Categories.Commands.DeleteCategory;
+using HomeSavingsTracker.Application.Categories.Commands.UpdateCategory;
 using HomeSavingsTracker.Application.Categories.Queries.GetCategories;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -26,5 +28,21 @@ public class CategoriesController(ISender sender) : ControllerBase
     {
         var categories = await sender.Send(new GetCategoriesQuery(), cancellationToken);
         return Ok(categories);
+    }
+
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Update(Guid id, UpdateCategoryRequest request, CancellationToken cancellationToken)
+    {
+        var command = new UpdateCategoryCommand(id, request.Name, request.Type);
+        await sender.Send(command, cancellationToken);
+
+        return NoContent();
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        await sender.Send(new DeleteCategoryCommand(id), cancellationToken);
+        return NoContent();
     }
 }

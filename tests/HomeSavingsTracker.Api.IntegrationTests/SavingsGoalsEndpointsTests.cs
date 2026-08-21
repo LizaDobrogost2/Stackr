@@ -80,6 +80,54 @@ public class SavingsGoalsEndpointsTests : IClassFixture<CustomWebApplicationFact
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
     }
 
+    [Fact]
+    public async Task Update_ForOwnedGoal_ChangesArePersisted()
+    {
+        var client = _factory.CreateClient();
+
+        var email = $"{Guid.NewGuid():N}@example.com";
+        var registerResponse = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(email, "P@ssw0rd123!"));
+        var auth = await registerResponse.Content.ReadFromJsonAsync<AuthResponse>();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth!.AccessToken);
+
+        var userId = await GetUserIdAsync(email);
+        var accountId = await SeedAccountWithContributionsAsync(userId);
+
+        var createResponse = await client.PostAsJsonAsync("/api/savings-goals", new CreateSavingsGoalRequest("Home Down Payment", 20000m, new DateOnly(2029, 1, 1), accountId));
+        var goalId = await createResponse.Content.ReadFromJsonAsync<Guid>();
+
+        var updateResponse = await client.PutAsJsonAsync($"/api/savings-goals/{goalId}", new UpdateSavingsGoalRequest("New Car", 15000m, new DateOnly(2028, 1, 1)));
+        Assert.Equal(HttpStatusCode.NoContent, updateResponse.StatusCode);
+
+        var progress = await (await client.GetAsync($"/api/savings-goals/{goalId}/progress")).Content.ReadFromJsonAsync<SavingsGoalProgressDto>();
+        Assert.Equal("New Car", progress!.Name);
+        Assert.Equal(15000m, progress.TargetAmount);
+        Assert.Equal(new DateOnly(2028, 1, 1), progress.TargetDate);
+    }
+
+    [Fact]
+    public async Task Delete_ForOwnedGoal_RemovesIt()
+    {
+        var client = _factory.CreateClient();
+
+        var email = $"{Guid.NewGuid():N}@example.com";
+        var registerResponse = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(email, "P@ssw0rd123!"));
+        var auth = await registerResponse.Content.ReadFromJsonAsync<AuthResponse>();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth!.AccessToken);
+
+        var userId = await GetUserIdAsync(email);
+        var accountId = await SeedAccountWithContributionsAsync(userId);
+
+        var createResponse = await client.PostAsJsonAsync("/api/savings-goals", new CreateSavingsGoalRequest("Home Down Payment", 20000m, new DateOnly(2029, 1, 1), accountId));
+        var goalId = await createResponse.Content.ReadFromJsonAsync<Guid>();
+
+        var deleteResponse = await client.DeleteAsync($"/api/savings-goals/{goalId}");
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+
+        var progressResponse = await client.GetAsync($"/api/savings-goals/{goalId}/progress");
+        Assert.Equal(HttpStatusCode.NotFound, progressResponse.StatusCode);
+    }
+
     private Task<string> GetUserIdAsync(string email)
     {
         using var scope = _factory.Services.CreateScope();

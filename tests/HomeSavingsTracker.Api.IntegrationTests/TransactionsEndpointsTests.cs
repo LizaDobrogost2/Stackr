@@ -85,4 +85,56 @@ public class TransactionsEndpointsTests : IClassFixture<CustomWebApplicationFact
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Update_ForOwnedTransaction_ChangesArePersisted()
+    {
+        var client = _factory.CreateClient();
+
+        var email = $"{Guid.NewGuid():N}@example.com";
+        var registerResponse = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(email, "P@ssw0rd123!"));
+        var auth = await registerResponse.Content.ReadFromJsonAsync<AuthResponse>();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth!.AccessToken);
+
+        var accountResponse = await client.PostAsJsonAsync("/api/accounts", new CreateAccountRequest("Checking", AccountType.Checking, 0));
+        var accountId = await accountResponse.Content.ReadFromJsonAsync<Guid>();
+
+        var createResponse = await client.PostAsJsonAsync("/api/transactions", new CreateTransactionRequest(
+            TransactionType.Expense, 25m, new DateOnly(2026, 8, 1), "Groceries", accountId, null));
+        var transactionId = await createResponse.Content.ReadFromJsonAsync<Guid>();
+
+        var updateResponse = await client.PutAsJsonAsync($"/api/transactions/{transactionId}", new UpdateTransactionRequest(
+            TransactionType.Contribution, 500m, new DateOnly(2026, 8, 5), "Updated", null));
+        Assert.Equal(HttpStatusCode.NoContent, updateResponse.StatusCode);
+
+        var transactions = await (await client.GetAsync($"/api/transactions?accountId={accountId}")).Content.ReadFromJsonAsync<List<TransactionDto>>();
+        var transaction = Assert.Single(transactions!);
+        Assert.Equal(TransactionType.Contribution, transaction.Type);
+        Assert.Equal(500m, transaction.Amount);
+        Assert.Equal("Updated", transaction.Description);
+    }
+
+    [Fact]
+    public async Task Delete_ForOwnedTransaction_RemovesIt()
+    {
+        var client = _factory.CreateClient();
+
+        var email = $"{Guid.NewGuid():N}@example.com";
+        var registerResponse = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(email, "P@ssw0rd123!"));
+        var auth = await registerResponse.Content.ReadFromJsonAsync<AuthResponse>();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth!.AccessToken);
+
+        var accountResponse = await client.PostAsJsonAsync("/api/accounts", new CreateAccountRequest("Checking", AccountType.Checking, 0));
+        var accountId = await accountResponse.Content.ReadFromJsonAsync<Guid>();
+
+        var createResponse = await client.PostAsJsonAsync("/api/transactions", new CreateTransactionRequest(
+            TransactionType.Expense, 25m, new DateOnly(2026, 8, 1), null, accountId, null));
+        var transactionId = await createResponse.Content.ReadFromJsonAsync<Guid>();
+
+        var deleteResponse = await client.DeleteAsync($"/api/transactions/{transactionId}");
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+
+        var transactions = await (await client.GetAsync($"/api/transactions?accountId={accountId}")).Content.ReadFromJsonAsync<List<TransactionDto>>();
+        Assert.Empty(transactions!);
+    }
 }

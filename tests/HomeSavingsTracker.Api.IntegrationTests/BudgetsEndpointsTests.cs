@@ -79,4 +79,51 @@ public class BudgetsEndpointsTests : IClassFixture<CustomWebApplicationFactory>
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Update_ForOwnedBudget_ChangesArePersisted()
+    {
+        var client = _factory.CreateClient();
+
+        var email = $"{Guid.NewGuid():N}@example.com";
+        var registerResponse = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(email, "P@ssw0rd123!"));
+        var auth = await registerResponse.Content.ReadFromJsonAsync<AuthResponse>();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth!.AccessToken);
+
+        var categoryResponse = await client.PostAsJsonAsync("/api/categories", new CreateCategoryRequest("Groceries", CategoryType.Expense));
+        var categoryId = await categoryResponse.Content.ReadFromJsonAsync<Guid>();
+
+        var createResponse = await client.PostAsJsonAsync("/api/budgets", new CreateBudgetRequest(categoryId, 400m, new DateOnly(2026, 8, 1)));
+        var budgetId = await createResponse.Content.ReadFromJsonAsync<Guid>();
+
+        var updateResponse = await client.PutAsJsonAsync($"/api/budgets/{budgetId}", new UpdateBudgetRequest(600m));
+        Assert.Equal(HttpStatusCode.NoContent, updateResponse.StatusCode);
+
+        var budgets = await (await client.GetAsync("/api/budgets?month=2026-08-01")).Content.ReadFromJsonAsync<List<BudgetDto>>();
+        var budget = Assert.Single(budgets!);
+        Assert.Equal(600m, budget.MonthlyLimit);
+    }
+
+    [Fact]
+    public async Task Delete_ForOwnedBudget_RemovesIt()
+    {
+        var client = _factory.CreateClient();
+
+        var email = $"{Guid.NewGuid():N}@example.com";
+        var registerResponse = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(email, "P@ssw0rd123!"));
+        var auth = await registerResponse.Content.ReadFromJsonAsync<AuthResponse>();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth!.AccessToken);
+
+        var categoryResponse = await client.PostAsJsonAsync("/api/categories", new CreateCategoryRequest("Groceries", CategoryType.Expense));
+        var categoryId = await categoryResponse.Content.ReadFromJsonAsync<Guid>();
+
+        var createResponse = await client.PostAsJsonAsync("/api/budgets", new CreateBudgetRequest(categoryId, 400m, new DateOnly(2026, 8, 1)));
+        var budgetId = await createResponse.Content.ReadFromJsonAsync<Guid>();
+
+        var deleteResponse = await client.DeleteAsync($"/api/budgets/{budgetId}");
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+
+        var budgets = await (await client.GetAsync("/api/budgets?month=2026-08-01")).Content.ReadFromJsonAsync<List<BudgetDto>>();
+        Assert.Empty(budgets!);
+    }
 }

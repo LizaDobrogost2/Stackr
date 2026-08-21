@@ -1,5 +1,7 @@
 using HomeSavingsTracker.Api.Contracts.Accounts;
 using HomeSavingsTracker.Application.Accounts.Commands.CreateAccount;
+using HomeSavingsTracker.Application.Accounts.Commands.DeleteAccount;
+using HomeSavingsTracker.Application.Accounts.Commands.UpdateAccount;
 using HomeSavingsTracker.Application.Accounts.Queries.GetAccounts;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -26,5 +28,21 @@ public class AccountsController(ISender sender) : ControllerBase
     {
         var accounts = await sender.Send(new GetAccountsQuery(), cancellationToken);
         return Ok(accounts);
+    }
+
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Update(Guid id, UpdateAccountRequest request, CancellationToken cancellationToken)
+    {
+        var command = new UpdateAccountCommand(id, request.Name, request.Type, request.CurrentBalance);
+        await sender.Send(command, cancellationToken);
+
+        return NoContent();
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        await sender.Send(new DeleteAccountCommand(id), cancellationToken);
+        return NoContent();
     }
 }
