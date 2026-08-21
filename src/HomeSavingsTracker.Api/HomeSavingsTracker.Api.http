@@ -1,0 +1,6 @@
+@HomeSavingsTracker.Api_HostAddress = http://localhost:5248
+
+GET {{HomeSavingsTracker.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
